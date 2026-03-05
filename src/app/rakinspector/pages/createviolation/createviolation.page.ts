@@ -2926,7 +2926,7 @@ captureVideo() {
       this.toastService.showSuccess("Video upload in process", "success");
       let capturedVid = data[0];
       console.log("1 video data", capturedVid);
-      let localVideoPath = capturedVid.fullPath;
+      let localVideoPath = capturedVid.localURL || capturedVid.fullPath;
       console.log("2 video path", localVideoPath);
       let directoryPath = localVideoPath.substr(0, localVideoPath.lastIndexOf('/'));
       let fileName = localVideoPath.substr(localVideoPath.lastIndexOf('/') + 1).replace(/[^a-zA-Z0-9-_\.]/g, '');
@@ -2970,7 +2970,7 @@ private compressAndUploadVideo(videoUri: string): void {
       saveToLibrary: false,
       width: 1280,
       height: 720,
-      videoBitrate: 2000000,
+      videoBitrate: 1000000,
       audioChannels: 1,
       audioSampleRate: 44100
     }).then((compressedUri: any) => {
@@ -2994,8 +2994,12 @@ private compressAndUploadVideo(videoUri: string): void {
 
     }).catch(err => {
       console.error("Compression failed due to format error or unsupported profile", JSON.stringify(err));
-      this.toastService.showError("Compression failed: unsupported video format", "Alert");
-      this.loaderService.loadingDismiss();
+      this.file.resolveLocalFilesystemUrl(videoUri)
+    .then((entry) => (<FileEntry>entry).file(file => this.readFile(file)))
+    .catch(e => {
+        console.error("Error resolving original video:", e);
+        this.toastService.showError("Video processing failed", "Alert");
+    });
     });
 
   }).catch(err => {
@@ -3329,30 +3333,30 @@ saveStandard(receivedStandardInfo: any) {
     }
   
     // Additional document validations
-    // if (this.isCustomerwithproof == "Yes") {
-    //   if (this.identityDocPhotos.length === 0) {
-    //     this.toastService.showError(
-    //       this.setLanguage == "ar" ? "الرجاء إدخال صورة الهوية" : "Identity Document Required", 
-    //       this.setLanguage == "ar" ? "تنبيه " : "Alert"
-    //     );
-    //     this.submitted = false;
-    //     return;
-    //   }
-    // }
+    if (this.isCustomerwithproof == "Yes") {
+      if (this.identityDocPhotos.length === 0) {
+        this.toastService.showError(
+          this.setLanguage == "ar" ? "الرجاء إدخال صورة الهوية" : "Identity Document Required", 
+          this.setLanguage == "ar" ? "تنبيه " : "Alert"
+        );
+        this.submitted = false;
+        return;
+      }
+    }
   
-    // if (this.svtSelected != 3 && this.svtSelected != 4) {
-    //   if (this.photos.length === 0) {
-    //     this.toastService.showError("Violation Document Required", this.setLanguage == "ar" ? "تنبيه " : "Alert");
-    //     this.submitted = false;
-    //     return;
-    //   }
-    // }
+    if (this.svtSelected != 3 && this.svtSelected != 4) {
+      if (this.photos.length === 0) {
+        this.toastService.showError("Violation Document Required", this.setLanguage == "ar" ? "تنبيه " : "Alert");
+        this.submitted = false;
+        return;
+      }
+    }
   
-    // if (this.isvideoCaptured === true && this.fName === ''){ 
-    //   this.toastService.showError("video Document Required", this.setLanguage == "ar" ? "تنبيه " : "Alert");
-    //   this.submitted = false;
-    //   return;
-    // }
+    if (this.isvideoCaptured === true && this.fName === ''){ 
+      this.toastService.showError("video Document Required", this.setLanguage == "ar" ? "تنبيه " : "Alert");
+      this.submitted = false;
+      return;
+    }
   
     // Prepare base data
     let data = {
@@ -3420,7 +3424,13 @@ saveStandard(receivedStandardInfo: any) {
     });
   
     // Set fine code and additional processing
-    this.creatViolation.value['fineCode'] = this.finecodeValue;
+    let fineCodeValue = this.finecodeValue;
+
+    if (typeof fineCodeValue === 'object' && fineCodeValue !== null) {
+      fineCodeValue = fineCodeValue.id || fineCodeValue.fine_code_id;
+    }
+
+    this.creatViolation.value['fineCode'] = fineCodeValue;
   
     // Process different violation types
     if (this.svtSelected == 1) {
@@ -3577,6 +3587,8 @@ saveStandard(receivedStandardInfo: any) {
       );
   
       }else{
+        console.log("FINAL REQUEST BODY SNAPSHOT",
+JSON.parse(JSON.stringify(this.creatViolation.value)));
         this.moduleService.violationCreation(this.creatViolation.value).subscribe((result: any) => {
           console.log("result", result);
           if (result.statusCode == 200 || result.status === 200) {
@@ -3670,9 +3682,25 @@ saveStandard(receivedStandardInfo: any) {
       maximumAge: 3600
     };
   
-    this.geolocation.getCurrentPosition(options).then((position) => {
-      this.creatViolation.controls['finePlace'].setValue(position.coords.latitude + ',' + position.coords.longitude);
-    });
+    this.geolocation.getCurrentPosition(options)
+.then((position) => {
+
+  const finePlace =
+    position.coords.latitude + ',' + position.coords.longitude;
+
+  this.creatViolation.controls['finePlace'].setValue(finePlace);
+
+})
+.catch((error) => {
+
+  console.error("Geolocation error", error);
+
+  this.toastService.showError(
+    "Unable to get location. Please enable GPS.",
+    "Alert"
+  );
+
+});
      console.log(this.creatViolation.controls['finePlace'].value,"finePlace");
   }
   onClearArea(event: {

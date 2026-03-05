@@ -571,7 +571,7 @@ export class RaisecomplaintPage implements OnInit {
           this.toastService.showSuccess("Video upload in process......", "Please Wait");
           let capturedVid = data[0];
           console.log("1 video data", capturedVid);
-          let localVideoPath = capturedVid.fullPath;
+          let localVideoPath =  capturedVid.fullPath;
           console.log("2 video path", localVideoPath);
           this.compressAndUploadVideo(localVideoPath);
           // this.uploadVideo(localVideoPath);
@@ -622,9 +622,13 @@ export class RaisecomplaintPage implements OnInit {
           console.error("Error getting compressed file size:", err);
         });
       }).catch(err => {
-        console.error("Error while compressing video", err);
-        this.toastService.showError("Compression failed", "Alert");
-        this.loaderService.loadingDismiss();
+         console.error("Compression failed due to format error or unsupported profile", JSON.stringify(err));
+      this.file.resolveLocalFilesystemUrl(videoUri)
+    .then((entry) => (<FileEntry>entry).file(file => this.readFile(file)))
+    .catch(e => {
+        console.error("Error resolving original video:", e);
+        this.toastService.showError("Video processing failed", "Alert");
+    });
       });
       }
     }).catch(err => {
